@@ -63,9 +63,13 @@ DO NOT proceed to Stage 2 until the user explicitly approves.
 --- STAGE 2: Generation (only after approval) ---
 
 For each item in the approved brief:
-1. Generate the image via ComfyUI API at http://127.0.0.1:8188
-   - Model: /workspace/extra/miniclaw/models/flux1-schnell.safetensors (or as configured)
-   - Save to /workspace/extra/miniclaw/[project]/creative/banners/
+1. Generate the image via ComfyUI API — ComfyUI runs on the HOST machine:
+   - API endpoint: http://host.docker.internal:8188
+     (Do NOT use 127.0.0.1 — that is the container loopback, not the host)
+   - Do NOT check for a local ComfyUI directory — verify availability by calling
+     GET http://host.docker.internal:8188/system_stats directly
+   - Discover available checkpoints via GET http://host.docker.internal:8188/object_info
+   - Save generated images to /workspace/extra/miniclaw/[project]/creative/banners/
 2. For any sections where generation is not appropriate, add to image-suggestions.md:
    stock photo direction, search keywords (Unsplash/Pexels), alt text
 
