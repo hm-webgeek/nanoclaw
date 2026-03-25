@@ -10,11 +10,18 @@ import {
   OnInboundMessage,
   RegisteredGroup,
 } from '../types.js';
+import { DiscordVoiceManager } from './discord-voice.js';
 
 export interface DiscordChannelOpts {
   onMessage: OnInboundMessage;
   onChatMetadata: OnChatMetadata;
   registeredGroups: () => Record<string, RegisteredGroup>;
+}
+
+export interface DiscordVoiceOpts {
+  deepgramKey: string;
+  azureKey: string;
+  azureRegion: string;
 }
 
 export class DiscordChannel implements Channel {
@@ -23,10 +30,21 @@ export class DiscordChannel implements Channel {
   private client: Client | null = null;
   private opts: DiscordChannelOpts;
   private botToken: string;
+  private voiceManager: DiscordVoiceManager | null = null;
 
-  constructor(botToken: string, opts: DiscordChannelOpts) {
+  constructor(botToken: string, opts: DiscordChannelOpts, voiceOpts?: DiscordVoiceOpts) {
     this.botToken = botToken;
     this.opts = opts;
+    if (voiceOpts) {
+      this.voiceManager = new DiscordVoiceManager(
+        voiceOpts.deepgramKey,
+        voiceOpts.azureKey,
+        voiceOpts.azureRegion,
+        opts.onMessage,
+        opts.registeredGroups,
+      );
+      logger.info('Discord voice enabled (Deepgram STT + Azure TTS)');
+    }
   }
 
   async connect(): Promise<void> {
@@ -36,12 +54,38 @@ export class DiscordChannel implements Channel {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildVoiceStates,
       ],
     });
 
     this.client.on(Events.MessageCreate, async (message: Message) => {
       // Ignore bot messages (including own)
       if (message.author.bot) return;
+
+      // Voice commands — handled before normal message pipeline
+      if (this.voiceManager && message.guild) {
+        const cmd = message.content.trim().toLowerCase();
+        if (cmd === '!join') {
+          const voiceChannel = message.member?.voice?.channel;
+          if (!voiceChannel) {
+            await message.reply('You need to be in a voice channel first.');
+          } else {
+            try {
+              await this.voiceManager.join(voiceChannel, `dc:${message.channelId}`);
+              await message.reply(`Joined **${voiceChannel.name}**. I'm listening!`);
+            } catch (err) {
+              logger.error({ err }, 'Failed to join voice channel');
+              await message.reply('Could not join the voice channel. Please try again.');
+            }
+          }
+          return;
+        }
+        if (cmd === '!leave') {
+          this.voiceManager.leave(message.guild.id);
+          await message.reply('Left the voice channel.');
+          return;
+        }
+      }
 
       const channelId = message.channelId;
       const chatJid = `dc:${channelId}`;
@@ -203,6 +247,14 @@ export class DiscordChannel implements Channel {
         }
       }
       logger.info({ jid, length: text.length }, 'Discord message sent');
+
+      // Also speak the response via voice if a session is active for this channel
+      if (this.voiceManager) {
+        const guildId = this.voiceManager.getGuildForJid(jid);
+        if (guildId) {
+          void this.voiceManager.speak(guildId, text);
+        }
+      }
     } catch (err) {
       logger.error({ jid, err }, 'Failed to send Discord message');
     }
@@ -239,12 +291,31 @@ export class DiscordChannel implements Channel {
 }
 
 registerChannel('discord', (opts: ChannelOpts) => {
-  const envVars = readEnvFile(['DISCORD_BOT_TOKEN']);
+  const envVars = readEnvFile([
+    'DISCORD_BOT_TOKEN',
+    'DEEPGRAM_API_KEY',
+    'AZURE_SPEECH_KEY',
+    'AZURE_SPEECH_REGION',
+  ]);
   const token =
     process.env.DISCORD_BOT_TOKEN || envVars.DISCORD_BOT_TOKEN || '';
   if (!token) {
     logger.warn('Discord: DISCORD_BOT_TOKEN not set');
     return null;
   }
-  return new DiscordChannel(token, opts);
+
+  const deepgramKey = process.env.DEEPGRAM_API_KEY || envVars.DEEPGRAM_API_KEY || '';
+  const azureKey = process.env.AZURE_SPEECH_KEY || envVars.AZURE_SPEECH_KEY || '';
+  const azureRegion = process.env.AZURE_SPEECH_REGION || envVars.AZURE_SPEECH_REGION || '';
+
+  const voiceOpts: DiscordVoiceOpts | undefined =
+    deepgramKey && azureKey && azureRegion
+      ? { deepgramKey, azureKey, azureRegion }
+      : undefined;
+
+  if (!voiceOpts) {
+    logger.info('Discord voice disabled (set DEEPGRAM_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION to enable)');
+  }
+
+  return new DiscordChannel(token, opts, voiceOpts);
 });
