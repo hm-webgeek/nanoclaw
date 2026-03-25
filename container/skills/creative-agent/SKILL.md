@@ -68,7 +68,9 @@ For each item in the approved brief:
      (Do NOT use 127.0.0.1 — that is the container loopback, not the host)
    - Do NOT check for a local ComfyUI directory — verify availability by calling
      GET http://host.docker.internal:8188/system_stats directly
-   - Discover available checkpoints via GET http://host.docker.internal:8188/object_info
+   - The FLUX model is GGUF format — use the UnetLoaderGGUF node, NOT UNETLoader
+     Discover available GGUF models via GET http://host.docker.internal:8188/object_info/UnetLoaderGGUF
+   - Discover standard checkpoints via GET http://host.docker.internal:8188/object_info/CheckpointLoaderSimple
    - Save generated images to /workspace/extra/miniclaw/[project]/creative/banners/
 2. For any sections where generation is not appropriate, add to image-suggestions.md:
    stock photo direction, search keywords (Unsplash/Pexels), alt text
