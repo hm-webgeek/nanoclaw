@@ -23,7 +23,11 @@ Invoke this sub-agent for written and visual creative work: website copy, market
 Use the `Task` tool to spawn the creative sub-agent, passing it:
 1. The task type (copy, visual, or both)
 2. The project brief or a path to it (e.g. `/workspace/group/[project]-brief.txt`)
-3. The brand context — link to `brand-guidelines.md` and `colours.md` if they exist
+3. The full brand context — all files in `/workspace/extra/miniclaw/[project]/brand/`:
+   - `brand-guidelines.md` — voice, tone, positioning
+   - `colours.md` — palette and usage rules
+   - `typography.md` — font pairings and scale
+   - `logo-concepts.md` — visual direction rationale
 4. The target pages or sections needing visuals
 5. The output location
 
@@ -32,9 +36,10 @@ Use the `Task` tool to spawn the creative sub-agent, passing it:
 ```
 You are a creative director and visual production specialist.
 
-Task: Review the project brief and produce banners/visuals for the website.
+Task: Review the project brief and brand guidelines, then produce banners/visuals for the website.
 Brief: [path to brief, e.g. /workspace/group/xentnexai-brief.txt]
-Brand: Read /workspace/extra/miniclaw/[project]/brand/brand-guidelines.md and colours.md
+Brand: Read all files in /workspace/extra/miniclaw/[project]/brand/ — specifically
+  brand-guidelines.md, colours.md, typography.md, and logo-concepts.md
 Pages needing visuals: [e.g. homepage hero, AI Lead Generation page, footer banner]
 Output: Write all deliverables to /workspace/extra/miniclaw/[project]/creative/
 
@@ -61,7 +66,8 @@ placement for each visual asset.
 You are a creative copywriter.
 
 Task: [what needs to be written]
-Brand: [brand name + read brand-guidelines.md if it exists]
+Brand: Read all files in /workspace/extra/miniclaw/[project]/brand/ — brand-guidelines.md,
+  colours.md, typography.md, and logo-concepts.md
 Audience: [who this is for]
 Goal: [what the writing should achieve]
 Tone: [e.g. "friendly and direct", "authoritative", or defer to brand guidelines]
