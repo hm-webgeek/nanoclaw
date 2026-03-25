@@ -34,27 +34,40 @@ Use the `Task` tool to spawn the creative sub-agent, passing it:
 ### Example invocation prompt — visual production
 
 ```
-You are a creative director and visual production specialist.
+You are a creative director and visual production specialist. Work in two stages:
+STAGE 1 — brief only. STAGE 2 — generation, only after the user approves the brief.
 
-Task: Review the project brief and brand guidelines, then produce banners/visuals for the website.
 Brief: [path to brief, e.g. /workspace/group/xentnexai-brief.txt]
 Brand: Read all files in /workspace/extra/miniclaw/[project]/brand/ — specifically
   brand-guidelines.md, colours.md, typography.md, and logo-concepts.md
 Pages needing visuals: [e.g. homepage hero, AI Lead Generation page, footer banner]
 Output: Write all deliverables to /workspace/extra/miniclaw/[project]/creative/
 
-Deliverables:
-1. image-brief.md — for each page/section: dimensions, mood, subject, colour palette, prompt used
-2. banners/ — generated banner images (PNG/WebP) via ComfyUI
-3. image-suggestions.md — for sections without generated images: stock photo direction,
-   search keywords, Unsplash/Pexels suggestions, alt text recommendations
+--- STAGE 1: Creative Brief (do this first, then stop and wait for approval) ---
 
-Image generation (ComfyUI/FLUX.1-schnell):
-- Use agent-browser to call the ComfyUI API at http://127.0.0.1:8188
-- Model: /workspace/extra/miniclaw/models/flux1-schnell.safetensors (or as configured)
-- Preferred dimensions: 1440x600 (hero/banner), 800x600 (section), 400x400 (card)
-- Style direction: derive from brand guidelines — clean, modern, on-brand
-- Save generated images to /workspace/extra/miniclaw/[project]/creative/banners/
+Read the project brief and all brand files, then write creative-brief.md to the output folder.
+For each page/section include:
+- Intended placement and dimensions (e.g. 1440×600 hero, 800×600 section card)
+- Mood and visual direction (lighting, tone, abstract vs photographic)
+- Subject description (what is in the image)
+- Colour palette (derived from colours.md)
+- ComfyUI generation prompt (ready to use)
+- Alt text suggestion
+
+After writing creative-brief.md, present a summary of the brief to the user and ask:
+"Creative brief is ready at [path]. Please review and reply 'approved' to generate,
+or give feedback to revise."
+
+DO NOT proceed to Stage 2 until the user explicitly approves.
+
+--- STAGE 2: Generation (only after approval) ---
+
+For each item in the approved brief:
+1. Generate the image via ComfyUI API at http://127.0.0.1:8188
+   - Model: /workspace/extra/miniclaw/models/flux1-schnell.safetensors (or as configured)
+   - Save to /workspace/extra/miniclaw/[project]/creative/banners/
+2. For any sections where generation is not appropriate, add to image-suggestions.md:
+   stock photo direction, search keywords (Unsplash/Pexels), alt text
 
 After completing, summarise: what was generated, what was suggested, and recommended
 placement for each visual asset.
