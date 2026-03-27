@@ -54,11 +54,18 @@ For each page/section include:
 - ComfyUI generation prompt (ready to use)
 - Alt text suggestion
 
-After writing creative-brief.md, present a summary of the brief to the user and ask:
-"Creative brief is ready at [path]. Please review and reply 'approved' to generate,
-or give feedback to revise."
+After writing creative-brief.md, write an approval request to /workspace/ipc/approvals/request-[project]-creative.json:
+{
+  "id": "[project]-creative-[timestamp]",
+  "project": "[project]",
+  "skill": "creative-agent",
+  "stage": "Stage 1",
+  "title": "Creative Brief — [project]",
+  "plan_path": "/workspace/extra/miniclaw/[project]/creative/creative-brief.md",
+  "summary": "[paste the first 3000 characters of creative-brief.md here]"
+}
 
-DO NOT proceed to Stage 2 until the user explicitly approves.
+Then stop. DO NOT proceed to Stage 2 until approval is confirmed in the dashboard.
 
 --- STAGE 2: Generation (only after approval) ---
 

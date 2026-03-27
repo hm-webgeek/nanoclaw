@@ -5,7 +5,7 @@ import { CronExpressionParser } from 'cron-parser';
 
 import { DATA_DIR, IPC_POLL_INTERVAL, TIMEZONE } from './config.js';
 import { AvailableGroup } from './container-runner.js';
-import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
+import { createApproval, createQaRun, createTask, deleteTask, getTaskById, updateTask, updateQaRun, getChatJidByFolder } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
@@ -112,6 +112,96 @@ export function startIpcWatcher(deps: IpcDeps): void {
           { err, sourceGroup },
           'Error reading IPC messages directory',
         );
+      }
+
+      // Process approval requests from this group's IPC directory
+      const approvalsDir = path.join(ipcBaseDir, sourceGroup, 'approvals');
+      try {
+        if (fs.existsSync(approvalsDir)) {
+          const approvalFiles = fs
+            .readdirSync(approvalsDir)
+            .filter((f) => f.endsWith('.json'));
+          for (const file of approvalFiles) {
+            const filePath = path.join(approvalsDir, file);
+            try {
+              const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+              if (data.id && data.project && data.skill && data.stage && data.title && data.plan_path) {
+                const chatJid = data.chat_jid ?? getChatJidByFolder(sourceGroup) ?? null;
+                createApproval({
+                  id: data.id,
+                  group_folder: sourceGroup,
+                  chat_jid: chatJid,
+                  project: data.project,
+                  skill: data.skill,
+                  stage: data.stage,
+                  title: data.title,
+                  plan_path: data.plan_path,
+                  summary: data.summary ?? null,
+                  requested_at: new Date().toISOString(),
+                });
+                logger.info({ id: data.id, skill: data.skill, sourceGroup }, 'Approval request registered');
+              } else {
+                logger.warn({ file, sourceGroup }, 'Invalid approval request - missing required fields');
+              }
+              fs.unlinkSync(filePath);
+            } catch (err) {
+              logger.error({ file, sourceGroup, err }, 'Error processing approval request');
+              const errorDir = path.join(ipcBaseDir, 'errors');
+              fs.mkdirSync(errorDir, { recursive: true });
+              fs.renameSync(filePath, path.join(errorDir, `${sourceGroup}-${file}`));
+            }
+          }
+        }
+      } catch (err) {
+        logger.error({ err, sourceGroup }, 'Error reading IPC approvals directory');
+      }
+
+      // Process QA run reports from this group's IPC directory
+      const qaDir = path.join(ipcBaseDir, sourceGroup, 'qa');
+      try {
+        if (fs.existsSync(qaDir)) {
+          const qaFiles = fs.readdirSync(qaDir).filter((f) => f.endsWith('.json'));
+          for (const file of qaFiles) {
+            const filePath = path.join(qaDir, file);
+            try {
+              const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+              if (data.id && data.project && data.status) {
+                if (data._update) {
+                  updateQaRun(data.id, {
+                    status: data.status,
+                    issues_found: data.issues_found,
+                    issues_fixed: data.issues_fixed,
+                    issues_pending: data.issues_pending,
+                    report_path: data.report_path,
+                    summary: data.summary,
+                  });
+                  logger.info({ id: data.id, status: data.status, sourceGroup }, 'QA run updated');
+                } else {
+                  createQaRun({
+                    id: data.id,
+                    group_folder: sourceGroup,
+                    project: data.project,
+                    run_at: new Date().toISOString(),
+                    status: data.status,
+                    report_path: data.report_path ?? null,
+                    summary: data.summary ?? null,
+                  });
+                  logger.info({ id: data.id, project: data.project, sourceGroup }, 'QA run created');
+                }
+              } else {
+                logger.warn({ file, sourceGroup }, 'Invalid QA run payload - missing required fields');
+              }
+              fs.unlinkSync(filePath);
+            } catch (err) {
+              logger.error({ file, sourceGroup, err }, 'Error processing QA run');
+              const errorDir = path.join(ipcBaseDir, 'errors');
+              fs.mkdirSync(errorDir, { recursive: true });
+              fs.renameSync(filePath, path.join(errorDir, `${sourceGroup}-${file}`));
+            }
+          }
+        }
+      } catch (err) {
+        logger.error({ err, sourceGroup }, 'Error reading IPC QA directory');
       }
 
       // Process tasks from this group's IPC directory

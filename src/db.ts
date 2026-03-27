@@ -82,6 +82,38 @@ function createSchema(database: Database.Database): void {
       container_config TEXT,
       requires_trigger INTEGER DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS approvals (
+      id TEXT PRIMARY KEY,
+      group_folder TEXT NOT NULL,
+      chat_jid TEXT,
+      project TEXT NOT NULL,
+      skill TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      title TEXT NOT NULL,
+      plan_path TEXT NOT NULL,
+      summary TEXT,
+      status TEXT DEFAULT 'pending',
+      feedback TEXT,
+      requested_at TEXT NOT NULL,
+      resolved_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);
+    CREATE INDEX IF NOT EXISTS idx_approvals_project ON approvals(project);
+
+    CREATE TABLE IF NOT EXISTS qa_runs (
+      id TEXT PRIMARY KEY,
+      group_folder TEXT NOT NULL,
+      project TEXT NOT NULL,
+      run_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      issues_found INTEGER DEFAULT 0,
+      issues_fixed INTEGER DEFAULT 0,
+      issues_pending INTEGER DEFAULT 0,
+      report_path TEXT,
+      summary TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_qa_runs_project ON qa_runs(project);
   `);
 
   // Add context_mode column if it doesn't exist (migration for existing DBs)
@@ -115,6 +147,13 @@ function createSchema(database: Database.Database): void {
     database.exec(
       `UPDATE registered_groups SET is_main = 1 WHERE folder = 'main'`,
     );
+  } catch {
+    /* column already exists */
+  }
+
+  // Add chat_jid column to approvals if it doesn't exist (migration for existing DBs)
+  try {
+    database.exec(`ALTER TABLE approvals ADD COLUMN chat_jid TEXT`);
   } catch {
     /* column already exists */
   }
@@ -598,6 +637,13 @@ export function setRegisteredGroup(jid: string, group: RegisteredGroup): void {
   );
 }
 
+export function getChatJidByFolder(folder: string): string | undefined {
+  const row = db
+    .prepare('SELECT jid FROM registered_groups WHERE folder = ?')
+    .get(folder) as { jid: string } | undefined;
+  return row?.jid;
+}
+
 export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
   const rows = db.prepare('SELECT * FROM registered_groups').all() as Array<{
     jid: string;
@@ -632,6 +678,119 @@ export function getAllRegisteredGroups(): Record<string, RegisteredGroup> {
     };
   }
   return result;
+}
+
+// --- Approval accessors ---
+
+export interface Approval {
+  id: string;
+  group_folder: string;
+  chat_jid: string | null;
+  project: string;
+  skill: string;
+  stage: string;
+  title: string;
+  plan_path: string;
+  summary: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  feedback: string | null;
+  requested_at: string;
+  resolved_at: string | null;
+}
+
+export function createApproval(approval: Omit<Approval, 'status' | 'feedback' | 'resolved_at'>): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO approvals
+     (id, group_folder, chat_jid, project, skill, stage, title, plan_path, summary, status, requested_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+  ).run(
+    approval.id,
+    approval.group_folder,
+    approval.chat_jid ?? null,
+    approval.project,
+    approval.skill,
+    approval.stage,
+    approval.title,
+    approval.plan_path,
+    approval.summary ?? null,
+    approval.requested_at,
+  );
+}
+
+export function getApproval(id: string): Approval | undefined {
+  return db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Approval | undefined;
+}
+
+export function getPendingApprovals(): Approval[] {
+  return db
+    .prepare(`SELECT * FROM approvals WHERE status = 'pending' ORDER BY requested_at DESC`)
+    .all() as Approval[];
+}
+
+export function getRecentApprovals(limit = 20): Approval[] {
+  return db
+    .prepare(`SELECT * FROM approvals ORDER BY requested_at DESC LIMIT ?`)
+    .all(limit) as Approval[];
+}
+
+export function resolveApproval(id: string, status: 'approved' | 'rejected', feedback?: string): void {
+  db.prepare(
+    `UPDATE approvals SET status = ?, feedback = ?, resolved_at = ? WHERE id = ?`,
+  ).run(status, feedback ?? null, new Date().toISOString(), id);
+}
+
+// --- QA run accessors ---
+
+export interface QaRun {
+  id: string;
+  group_folder: string;
+  project: string;
+  run_at: string;
+  status: 'running' | 'passed' | 'failed' | 'partial';
+  issues_found: number;
+  issues_fixed: number;
+  issues_pending: number;
+  report_path: string | null;
+  summary: string | null;
+}
+
+export function createQaRun(run: Omit<QaRun, 'issues_found' | 'issues_fixed' | 'issues_pending'>): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO qa_runs
+     (id, group_folder, project, run_at, status, issues_found, issues_fixed, issues_pending, report_path, summary)
+     VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+  ).run(run.id, run.group_folder, run.project, run.run_at, run.status, run.report_path ?? null, run.summary ?? null);
+}
+
+export function updateQaRun(
+  id: string,
+  updates: Partial<Pick<QaRun, 'status' | 'issues_found' | 'issues_fixed' | 'issues_pending' | 'report_path' | 'summary'>>,
+): void {
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status); }
+  if (updates.issues_found !== undefined) { fields.push('issues_found = ?'); values.push(updates.issues_found); }
+  if (updates.issues_fixed !== undefined) { fields.push('issues_fixed = ?'); values.push(updates.issues_fixed); }
+  if (updates.issues_pending !== undefined) { fields.push('issues_pending = ?'); values.push(updates.issues_pending); }
+  if (updates.report_path !== undefined) { fields.push('report_path = ?'); values.push(updates.report_path); }
+  if (updates.summary !== undefined) { fields.push('summary = ?'); values.push(updates.summary); }
+
+  if (fields.length === 0) return;
+  values.push(id);
+  db.prepare(`UPDATE qa_runs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+}
+
+export function getQaRunsForProject(project: string, limit = 10): QaRun[] {
+  return db
+    .prepare(`SELECT * FROM qa_runs WHERE project = ? ORDER BY run_at DESC LIMIT ?`)
+    .all(project, limit) as QaRun[];
+}
+
+export function getRecentQaRuns(limit = 20): QaRun[] {
+  return db
+    .prepare(`SELECT * FROM qa_runs ORDER BY run_at DESC LIMIT ?`)
+    .all(limit) as QaRun[];
 }
 
 // --- JSON migration ---

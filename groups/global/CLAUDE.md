@@ -18,6 +18,8 @@ Your output is sent to the user or group.
 
 You also have `mcp__nanoclaw__send_message` which sends a message immediately while you're still working. This is useful when you want to acknowledge a request before starting longer work.
 
+**Always acknowledge every message immediately using `send_message` before starting any work.** Even a simple "On it!" or "Working on that now, give me a few minutes." is enough. Never go silent after receiving a request — the user needs to know you received it and are working on it.
+
 ### Internal thoughts
 
 If part of your output is internal reasoning rather than something for the user, wrap it in `<internal>` tags:
@@ -46,6 +48,29 @@ When you learn something important:
 - Create files for structured data (e.g., `customers.md`, `preferences.md`)
 - Split files larger than 500 lines into folders
 - Keep an index in your memory for the files you create
+
+## Approval Rejections
+
+If you receive a message starting with ❌ about a plan not being approved, it means a sub-agent's work was rejected from the dashboard with feedback. Re-invoke the relevant sub-agent and pass the feedback as additional context so it can revise and resubmit.
+
+## Work Log
+
+After completing any meaningful work, append an entry to `/workspace/group/work-done.md`. Log after: sending a substantive message, writing/modifying files, calling external APIs, running bash commands with side effects, or creating/updating scheduled tasks.
+
+Format each entry as:
+
+```
+## YYYY-MM-DD HH:MM
+
+**Task:** <what was requested>
+**Actions:**
+- <action taken>
+**Result:** <completed / partial / failed>
+
+---
+```
+
+Use `Bash` to append. Create the file with a `# Work Done` header if it does not exist. See `.claude/skills/work-log/SKILL.md` for full guidance and examples.
 
 ## Message Formatting
 
