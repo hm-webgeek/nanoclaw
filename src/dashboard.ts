@@ -10,7 +10,15 @@ import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 
-import { getPendingApprovals, getApproval, getRecentApprovals, getRecentQaRuns, resolveApproval } from './db.js';
+import {
+  getPendingApprovals,
+  getApproval,
+  getRecentApprovals,
+  getRecentQaRuns,
+  resolveApproval,
+  createTask,
+  getAllRegisteredGroups,
+} from './db.js';
 import { logger } from './logger.js';
 
 export const DASHBOARD_PORT = parseInt(
@@ -967,10 +975,16 @@ function handleApprovalsApi(
   if (req.method === 'POST' && match) {
     const [, id, action] = match;
     let body = '';
-    req.on('data', (chunk) => { body += chunk; });
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
     req.on('end', () => {
       let feedback: string | undefined;
-      try { feedback = JSON.parse(body).feedback || undefined; } catch { /* no body */ }
+      try {
+        feedback = JSON.parse(body).feedback || undefined;
+      } catch {
+        /* no body */
+      }
       const status = action === 'approve' ? 'approved' : 'rejected';
       resolveApproval(id, status, feedback);
       logger.info({ id, action }, 'Approval resolved via dashboard');
@@ -980,12 +994,31 @@ function handleApprovalsApi(
         try {
           const approval = getApproval(id);
           if (approval?.group_folder && approval?.chat_jid) {
-            const ipcDir = path.join(storePath, '..', 'ipc', approval.group_folder, 'messages');
+            const ipcDir = path.join(
+              storePath,
+              '..',
+              'ipc',
+              approval.group_folder,
+              'messages',
+            );
             fs.mkdirSync(ipcDir, { recursive: true });
-            const msgFile = path.join(ipcDir, `rejection-${id}-${Date.now()}.json`);
+            const msgFile = path.join(
+              ipcDir,
+              `rejection-${id}-${Date.now()}.json`,
+            );
             const text = `❌ *${approval.title}* was not approved.\n\nFeedback: ${feedback || '(no feedback provided)'}\n\nPlease revise and resubmit.`;
-            fs.writeFileSync(msgFile, JSON.stringify({ type: 'message', chatJid: approval.chat_jid, text }));
-            logger.info({ id, group: approval.group_folder }, 'Rejection feedback IPC message written');
+            fs.writeFileSync(
+              msgFile,
+              JSON.stringify({
+                type: 'message',
+                chatJid: approval.chat_jid,
+                text,
+              }),
+            );
+            logger.info(
+              { id, group: approval.group_folder },
+              'Rejection feedback IPC message written',
+            );
           }
         } catch (err) {
           logger.error({ err, id }, 'Failed to write rejection IPC message');
@@ -1000,6 +1033,186 @@ function handleApprovalsApi(
 
   res.writeHead(404);
   res.end(JSON.stringify({ error: 'Not found' }));
+}
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
+function buildProjectBrief(lead: Record<string, unknown>): string {
+  const name = String(lead.businessName ?? '');
+  const address = String(lead.address ?? '');
+  const city = address.split(',').slice(-2, -1)[0]?.trim() ?? '';
+
+  const lines = [
+    `# Project Brief — ${name}`,
+    '',
+    `## Business`,
+    `- **Name:** ${name}`,
+    `- **Category:** ${lead.category ?? 'Not specified'}`,
+    `- **Address:** ${address}`,
+    `- **Rating:** ${lead.rating ?? 'N/A'}`,
+    '',
+    `## Contact`,
+    `- **Phone:** ${lead.phone ?? lead.phoneAlt ?? 'Not provided'}`,
+    `- **Email:** ${lead.email ?? lead.emailAlt ?? 'Not provided'}`,
+    `- **Website:** ${lead.websiteUrl ?? 'None — no-website business'}`,
+    `- **LinkedIn:** ${lead.linkedin ?? 'N/A'}`,
+    `- **Facebook:** ${lead.facebook ?? 'N/A'}`,
+    `- **Instagram:** ${lead.instagram ?? 'N/A'}`,
+    '',
+    `## Target Audience`,
+    `Local customers in ${city || 'the area'} searching for ${lead.category ?? 'this service'}.`,
+    '',
+    `## Website Goals`,
+    '- Generate leads and enquiries',
+    '- Establish credibility and trust',
+    '- Rank locally for relevant search terms',
+    '',
+    `## Pages Needed`,
+    '- Homepage (hero, services overview, CTA)',
+    '- Services page (detailed service descriptions)',
+    '- About page (business story, team, trust signals)',
+    '- Contact page (form, phone, address, map)',
+    '',
+    `## Notes`,
+    lead.notes ? String(lead.notes) : 'No additional notes.',
+    '',
+    `## Source`,
+    `Lead ID: ${lead.id} (webgeek-lead-gen)`,
+    `Quality: ${lead.quality ?? 'unknown'}`,
+  ];
+  return lines.join('\n');
+}
+
+function buildUsp(lead: Record<string, unknown>): string {
+  const name = String(lead.businessName ?? '');
+  const category = String(lead.category ?? 'this service');
+  const address = String(lead.address ?? '');
+  const city = address.split(',').slice(-2, -1)[0]?.trim() ?? 'the local area';
+
+  return [
+    `# USPs — ${name}`,
+    '',
+    '## Unique Selling Points',
+    '',
+    `1. Local ${category} business based in ${city} — easy to reach, knows the area`,
+    `2. ${lead.rating ? `Rated ${lead.rating}/5 — proven track record with real customers` : 'Established local presence'}`,
+    `3. Direct contact with the business — no call centres or middlemen`,
+    `4. Specialist in ${category} — focused expertise, not a generalist`,
+    `5. Fast response for local customers in ${city}`,
+    '',
+    '> Note: Verify and expand these USPs with the business owner before finalising copy.',
+  ].join('\n');
+}
+
+async function handlePipelineWebsite(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  storePath: string,
+): Promise<void> {
+  res.setHeader('Content-Type', 'application/json');
+
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
+  }
+
+  let body = '';
+  await new Promise<void>((resolve) => {
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', resolve);
+  });
+
+  let lead: Record<string, unknown>;
+  try {
+    lead = JSON.parse(body);
+  } catch {
+    res.writeHead(400);
+    res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+    return;
+  }
+
+  if (!lead.businessName) {
+    res.writeHead(400);
+    res.end(JSON.stringify({ error: 'businessName is required' }));
+    return;
+  }
+
+  // Generate project slug
+  const address = String(lead.address ?? '');
+  const city = address.split(',').slice(-2, -1)[0]?.trim() ?? '';
+  const slug = slugify(`${lead.businessName}${city ? '-' + city : ''}`);
+
+  // Scaffold project directories
+  const projectBase = path.join(
+    path.dirname(storePath),
+    '..',
+    'Documents',
+    'Public',
+    slug,
+  );
+  const dirs = [
+    'brand', 'wireframe', 'seo/content',
+    'creative/copy', 'creative/banners', 'site', 'qa',
+  ];
+  for (const dir of dirs) {
+    fs.mkdirSync(path.join(projectBase, dir), { recursive: true });
+  }
+
+  // Write project brief and USPs
+  fs.writeFileSync(path.join(projectBase, 'project-brief.md'), buildProjectBrief(lead));
+  fs.writeFileSync(path.join(projectBase, 'usp.md'), buildUsp(lead));
+
+  // Ensure IPC dirs exist for main group
+  const groups = getAllRegisteredGroups();
+  const mainEntry = Object.entries(groups).find(([, g]) => g.isMain);
+  if (!mainEntry) {
+    res.writeHead(500);
+    res.end(JSON.stringify({ error: 'Main group not found' }));
+    return;
+  }
+  const [mainJid, mainGroup] = mainEntry;
+
+  const ipcBase = path.join(path.dirname(storePath), 'ipc', mainGroup.folder);
+  fs.mkdirSync(path.join(ipcBase, 'approvals'), { recursive: true });
+  fs.mkdirSync(path.join(ipcBase, 'qa'), { recursive: true });
+
+  // Create a once-task to trigger the orchestration agent
+  const taskId = `website-gen-${slug}-${Date.now()}`;
+  const prompt = [
+    `Read .claude/skills/website-generation/SKILL.md and run the website generation pipeline.`,
+    ``,
+    `Project: ${slug}`,
+    `The project brief and USPs are already written at /workspace/extra/miniclaw/${slug}/.`,
+    `Skip Phase 1 (requirements-agent) — brief is ready. Start from Phase 2 (branding-agent).`,
+    ``,
+    `Lead ID for callback: ${lead.id ?? 'unknown'}`,
+    `Webgeek callback URL: http://host.docker.internal:3000/api/leads/${lead.id}/update-generated-site`,
+  ].join('\n');
+
+  createTask({
+    id: taskId,
+    group_folder: mainGroup.folder,
+    chat_jid: mainJid,
+    prompt,
+    schedule_type: 'once',
+    schedule_value: new Date().toISOString(),
+    context_mode: 'group',
+    next_run: new Date().toISOString(),
+    status: 'active',
+    created_at: new Date().toISOString(),
+  });
+
+  logger.info({ slug, taskId, leadId: lead.id }, 'Website generation pipeline triggered');
+
+  res.writeHead(200);
+  res.end(JSON.stringify({ ok: true, project: slug, taskId, dashboardUrl: `http://localhost:${DASHBOARD_PORT}` }));
 }
 
 function handleQaRunsApi(res: http.ServerResponse): void {
@@ -1027,6 +1240,15 @@ export function startDashboard(
 
     if (url === '/api/qa-runs') {
       handleQaRunsApi(res);
+      return;
+    }
+
+    if (url === '/api/pipeline/website') {
+      handlePipelineWebsite(req, res, storePath).catch((err) => {
+        logger.error({ err }, 'Pipeline website API error');
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      });
       return;
     }
 

@@ -62,6 +62,12 @@ GitHub account: [from environment or project-brief.md]
    - Verify the page title matches the expected H1/meta title
 
 Report: live URL, deployment ID, and screenshot confirmation.
+
+7. If a webgeek callback URL was provided in the task prompt, call it:
+   curl -s -X POST "[callback_url]" \
+     -H "Content-Type: application/json" \
+     -d '{"generatedSiteUrl": "[live_url]"}'
+   This updates the lead record in webgeek-lead-gen with the live site URL.
 ```
 
 ## After the sub-agent completes
