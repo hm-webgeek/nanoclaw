@@ -1,4 +1,10 @@
-import { Client, Events, GatewayIntentBits, Message, TextChannel } from 'discord.js';
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+  Message,
+  TextChannel,
+} from 'discord.js';
 
 import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
 import { readEnvFile } from '../env.js';
@@ -32,7 +38,11 @@ export class DiscordChannel implements Channel {
   private botToken: string;
   private voiceManager: DiscordVoiceManager | null = null;
 
-  constructor(botToken: string, opts: DiscordChannelOpts, voiceOpts?: DiscordVoiceOpts) {
+  constructor(
+    botToken: string,
+    opts: DiscordChannelOpts,
+    voiceOpts?: DiscordVoiceOpts,
+  ) {
     this.botToken = botToken;
     this.opts = opts;
     if (voiceOpts) {
@@ -71,11 +81,18 @@ export class DiscordChannel implements Channel {
             await message.reply('You need to be in a voice channel first.');
           } else {
             try {
-              await this.voiceManager.join(voiceChannel, `dc:${message.channelId}`);
-              await message.reply(`Joined **${voiceChannel.name}**. I'm listening!`);
+              await this.voiceManager.join(
+                voiceChannel,
+                `dc:${message.channelId}`,
+              );
+              await message.reply(
+                `Joined **${voiceChannel.name}**. I'm listening!`,
+              );
             } catch (err) {
               logger.error({ err }, 'Failed to join voice channel');
-              await message.reply('Could not join the voice channel. Please try again.');
+              await message.reply(
+                'Could not join the voice channel. Please try again.',
+              );
             }
           }
           return;
@@ -132,18 +149,20 @@ export class DiscordChannel implements Channel {
 
       // Handle attachments — store placeholders so the agent knows something was sent
       if (message.attachments.size > 0) {
-        const attachmentDescriptions = [...message.attachments.values()].map((att) => {
-          const contentType = att.contentType || '';
-          if (contentType.startsWith('image/')) {
-            return `[Image: ${att.name || 'image'}]`;
-          } else if (contentType.startsWith('video/')) {
-            return `[Video: ${att.name || 'video'}]`;
-          } else if (contentType.startsWith('audio/')) {
-            return `[Audio: ${att.name || 'audio'}]`;
-          } else {
-            return `[File: ${att.name || 'file'}]`;
-          }
-        });
+        const attachmentDescriptions = [...message.attachments.values()].map(
+          (att) => {
+            const contentType = att.contentType || '';
+            if (contentType.startsWith('image/')) {
+              return `[Image: ${att.name || 'image'}]`;
+            } else if (contentType.startsWith('video/')) {
+              return `[Video: ${att.name || 'video'}]`;
+            } else if (contentType.startsWith('audio/')) {
+              return `[Audio: ${att.name || 'audio'}]`;
+            } else {
+              return `[File: ${att.name || 'file'}]`;
+            }
+          },
+        );
         if (content) {
           content = `${content}\n${attachmentDescriptions.join('\n')}`;
         } else {
@@ -169,7 +188,13 @@ export class DiscordChannel implements Channel {
 
       // Store chat metadata for discovery
       const isGroup = message.guild !== null;
-      this.opts.onChatMetadata(chatJid, timestamp, chatName, 'discord', isGroup);
+      this.opts.onChatMetadata(
+        chatJid,
+        timestamp,
+        chatName,
+        'discord',
+        isGroup,
+      );
 
       // Only deliver full message for registered groups
       const group = this.opts.registeredGroups()[chatJid];
@@ -304,9 +329,12 @@ registerChannel('discord', (opts: ChannelOpts) => {
     return null;
   }
 
-  const deepgramKey = process.env.DEEPGRAM_API_KEY || envVars.DEEPGRAM_API_KEY || '';
-  const azureKey = process.env.AZURE_SPEECH_KEY || envVars.AZURE_SPEECH_KEY || '';
-  const azureRegion = process.env.AZURE_SPEECH_REGION || envVars.AZURE_SPEECH_REGION || '';
+  const deepgramKey =
+    process.env.DEEPGRAM_API_KEY || envVars.DEEPGRAM_API_KEY || '';
+  const azureKey =
+    process.env.AZURE_SPEECH_KEY || envVars.AZURE_SPEECH_KEY || '';
+  const azureRegion =
+    process.env.AZURE_SPEECH_REGION || envVars.AZURE_SPEECH_REGION || '';
 
   const voiceOpts: DiscordVoiceOpts | undefined =
     deepgramKey && azureKey && azureRegion
@@ -314,7 +342,9 @@ registerChannel('discord', (opts: ChannelOpts) => {
       : undefined;
 
   if (!voiceOpts) {
-    logger.info('Discord voice disabled (set DEEPGRAM_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION to enable)');
+    logger.info(
+      'Discord voice disabled (set DEEPGRAM_API_KEY, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION to enable)',
+    );
   }
 
   return new DiscordChannel(token, opts, voiceOpts);

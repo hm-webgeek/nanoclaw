@@ -6,6 +6,7 @@ import {
   CREDENTIAL_PROXY_PORT,
   IDLE_TIMEOUT,
   POLL_INTERVAL,
+  STORE_DIR,
   TIMEZONE,
   TRIGGER_PATTERN,
 } from './config.js';
@@ -60,6 +61,7 @@ import {
 import { startSchedulerLoop } from './task-scheduler.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
+import { startDashboard } from './dashboard.js';
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
@@ -475,6 +477,9 @@ async function main(): Promise<void> {
   initDatabase();
   logger.info('Database initialized');
   loadState();
+
+  // Start dashboard (port 3002)
+  startDashboard(STORE_DIR, path.join(process.cwd(), 'logs'));
   restoreRemoteControl();
 
   // Start credential proxy (containers route API calls through this)

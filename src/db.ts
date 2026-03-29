@@ -698,7 +698,9 @@ export interface Approval {
   resolved_at: string | null;
 }
 
-export function createApproval(approval: Omit<Approval, 'status' | 'feedback' | 'resolved_at'>): void {
+export function createApproval(
+  approval: Omit<Approval, 'status' | 'feedback' | 'resolved_at'>,
+): void {
   db.prepare(
     `INSERT OR REPLACE INTO approvals
      (id, group_folder, chat_jid, project, skill, stage, title, plan_path, summary, status, requested_at)
@@ -718,12 +720,16 @@ export function createApproval(approval: Omit<Approval, 'status' | 'feedback' | 
 }
 
 export function getApproval(id: string): Approval | undefined {
-  return db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as Approval | undefined;
+  return db.prepare('SELECT * FROM approvals WHERE id = ?').get(id) as
+    | Approval
+    | undefined;
 }
 
 export function getPendingApprovals(): Approval[] {
   return db
-    .prepare(`SELECT * FROM approvals WHERE status = 'pending' ORDER BY requested_at DESC`)
+    .prepare(
+      `SELECT * FROM approvals WHERE status = 'pending' ORDER BY requested_at DESC`,
+    )
     .all() as Approval[];
 }
 
@@ -733,7 +739,11 @@ export function getRecentApprovals(limit = 20): Approval[] {
     .all(limit) as Approval[];
 }
 
-export function resolveApproval(id: string, status: 'approved' | 'rejected', feedback?: string): void {
+export function resolveApproval(
+  id: string,
+  status: 'approved' | 'rejected',
+  feedback?: string,
+): void {
   db.prepare(
     `UPDATE approvals SET status = ?, feedback = ?, resolved_at = ? WHERE id = ?`,
   ).run(status, feedback ?? null, new Date().toISOString(), id);
@@ -754,36 +764,78 @@ export interface QaRun {
   summary: string | null;
 }
 
-export function createQaRun(run: Omit<QaRun, 'issues_found' | 'issues_fixed' | 'issues_pending'>): void {
+export function createQaRun(
+  run: Omit<QaRun, 'issues_found' | 'issues_fixed' | 'issues_pending'>,
+): void {
   db.prepare(
     `INSERT OR REPLACE INTO qa_runs
      (id, group_folder, project, run_at, status, issues_found, issues_fixed, issues_pending, report_path, summary)
      VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
-  ).run(run.id, run.group_folder, run.project, run.run_at, run.status, run.report_path ?? null, run.summary ?? null);
+  ).run(
+    run.id,
+    run.group_folder,
+    run.project,
+    run.run_at,
+    run.status,
+    run.report_path ?? null,
+    run.summary ?? null,
+  );
 }
 
 export function updateQaRun(
   id: string,
-  updates: Partial<Pick<QaRun, 'status' | 'issues_found' | 'issues_fixed' | 'issues_pending' | 'report_path' | 'summary'>>,
+  updates: Partial<
+    Pick<
+      QaRun,
+      | 'status'
+      | 'issues_found'
+      | 'issues_fixed'
+      | 'issues_pending'
+      | 'report_path'
+      | 'summary'
+    >
+  >,
 ): void {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status); }
-  if (updates.issues_found !== undefined) { fields.push('issues_found = ?'); values.push(updates.issues_found); }
-  if (updates.issues_fixed !== undefined) { fields.push('issues_fixed = ?'); values.push(updates.issues_fixed); }
-  if (updates.issues_pending !== undefined) { fields.push('issues_pending = ?'); values.push(updates.issues_pending); }
-  if (updates.report_path !== undefined) { fields.push('report_path = ?'); values.push(updates.report_path); }
-  if (updates.summary !== undefined) { fields.push('summary = ?'); values.push(updates.summary); }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.issues_found !== undefined) {
+    fields.push('issues_found = ?');
+    values.push(updates.issues_found);
+  }
+  if (updates.issues_fixed !== undefined) {
+    fields.push('issues_fixed = ?');
+    values.push(updates.issues_fixed);
+  }
+  if (updates.issues_pending !== undefined) {
+    fields.push('issues_pending = ?');
+    values.push(updates.issues_pending);
+  }
+  if (updates.report_path !== undefined) {
+    fields.push('report_path = ?');
+    values.push(updates.report_path);
+  }
+  if (updates.summary !== undefined) {
+    fields.push('summary = ?');
+    values.push(updates.summary);
+  }
 
   if (fields.length === 0) return;
   values.push(id);
-  db.prepare(`UPDATE qa_runs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  db.prepare(`UPDATE qa_runs SET ${fields.join(', ')} WHERE id = ?`).run(
+    ...values,
+  );
 }
 
 export function getQaRunsForProject(project: string, limit = 10): QaRun[] {
   return db
-    .prepare(`SELECT * FROM qa_runs WHERE project = ? ORDER BY run_at DESC LIMIT ?`)
+    .prepare(
+      `SELECT * FROM qa_runs WHERE project = ? ORDER BY run_at DESC LIMIT ?`,
+    )
     .all(project, limit) as QaRun[];
 }
 

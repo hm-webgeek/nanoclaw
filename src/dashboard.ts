@@ -1125,7 +1125,9 @@ async function handlePipelineWebsite(
 
   let body = '';
   await new Promise<void>((resolve) => {
-    req.on('data', (chunk) => { body += chunk; });
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
     req.on('end', resolve);
   });
 
@@ -1158,15 +1160,23 @@ async function handlePipelineWebsite(
     slug,
   );
   const dirs = [
-    'brand', 'wireframe', 'seo/content',
-    'creative/copy', 'creative/banners', 'site', 'qa',
+    'brand',
+    'wireframe',
+    'seo/content',
+    'creative/copy',
+    'creative/banners',
+    'site',
+    'qa',
   ];
   for (const dir of dirs) {
     fs.mkdirSync(path.join(projectBase, dir), { recursive: true });
   }
 
   // Write project brief and USPs
-  fs.writeFileSync(path.join(projectBase, 'project-brief.md'), buildProjectBrief(lead));
+  fs.writeFileSync(
+    path.join(projectBase, 'project-brief.md'),
+    buildProjectBrief(lead),
+  );
   fs.writeFileSync(path.join(projectBase, 'usp.md'), buildUsp(lead));
 
   // Ensure IPC dirs exist for main group
@@ -1209,10 +1219,20 @@ async function handlePipelineWebsite(
     created_at: new Date().toISOString(),
   });
 
-  logger.info({ slug, taskId, leadId: lead.id }, 'Website generation pipeline triggered');
+  logger.info(
+    { slug, taskId, leadId: lead.id },
+    'Website generation pipeline triggered',
+  );
 
   res.writeHead(200);
-  res.end(JSON.stringify({ ok: true, project: slug, taskId, dashboardUrl: `http://localhost:${DASHBOARD_PORT}` }));
+  res.end(
+    JSON.stringify({
+      ok: true,
+      project: slug,
+      taskId,
+      dashboardUrl: `http://localhost:${DASHBOARD_PORT}`,
+    }),
+  );
 }
 
 function handleQaRunsApi(res: http.ServerResponse): void {

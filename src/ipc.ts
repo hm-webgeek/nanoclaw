@@ -5,7 +5,16 @@ import { CronExpressionParser } from 'cron-parser';
 
 import { DATA_DIR, IPC_POLL_INTERVAL, TIMEZONE } from './config.js';
 import { AvailableGroup } from './container-runner.js';
-import { createApproval, createQaRun, createTask, deleteTask, getTaskById, updateTask, updateQaRun, getChatJidByFolder } from './db.js';
+import {
+  createApproval,
+  createQaRun,
+  createTask,
+  deleteTask,
+  getTaskById,
+  updateTask,
+  updateQaRun,
+  getChatJidByFolder,
+} from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
 import { RegisteredGroup } from './types.js';
@@ -125,8 +134,16 @@ export function startIpcWatcher(deps: IpcDeps): void {
             const filePath = path.join(approvalsDir, file);
             try {
               const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-              if (data.id && data.project && data.skill && data.stage && data.title && data.plan_path) {
-                const chatJid = data.chat_jid ?? getChatJidByFolder(sourceGroup) ?? null;
+              if (
+                data.id &&
+                data.project &&
+                data.skill &&
+                data.stage &&
+                data.title &&
+                data.plan_path
+              ) {
+                const chatJid =
+                  data.chat_jid ?? getChatJidByFolder(sourceGroup) ?? null;
                 createApproval({
                   id: data.id,
                   group_folder: sourceGroup,
@@ -139,28 +156,45 @@ export function startIpcWatcher(deps: IpcDeps): void {
                   summary: data.summary ?? null,
                   requested_at: new Date().toISOString(),
                 });
-                logger.info({ id: data.id, skill: data.skill, sourceGroup }, 'Approval request registered');
+                logger.info(
+                  { id: data.id, skill: data.skill, sourceGroup },
+                  'Approval request registered',
+                );
               } else {
-                logger.warn({ file, sourceGroup }, 'Invalid approval request - missing required fields');
+                logger.warn(
+                  { file, sourceGroup },
+                  'Invalid approval request - missing required fields',
+                );
               }
               fs.unlinkSync(filePath);
             } catch (err) {
-              logger.error({ file, sourceGroup, err }, 'Error processing approval request');
+              logger.error(
+                { file, sourceGroup, err },
+                'Error processing approval request',
+              );
               const errorDir = path.join(ipcBaseDir, 'errors');
               fs.mkdirSync(errorDir, { recursive: true });
-              fs.renameSync(filePath, path.join(errorDir, `${sourceGroup}-${file}`));
+              fs.renameSync(
+                filePath,
+                path.join(errorDir, `${sourceGroup}-${file}`),
+              );
             }
           }
         }
       } catch (err) {
-        logger.error({ err, sourceGroup }, 'Error reading IPC approvals directory');
+        logger.error(
+          { err, sourceGroup },
+          'Error reading IPC approvals directory',
+        );
       }
 
       // Process QA run reports from this group's IPC directory
       const qaDir = path.join(ipcBaseDir, sourceGroup, 'qa');
       try {
         if (fs.existsSync(qaDir)) {
-          const qaFiles = fs.readdirSync(qaDir).filter((f) => f.endsWith('.json'));
+          const qaFiles = fs
+            .readdirSync(qaDir)
+            .filter((f) => f.endsWith('.json'));
           for (const file of qaFiles) {
             const filePath = path.join(qaDir, file);
             try {
@@ -175,7 +209,10 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     report_path: data.report_path,
                     summary: data.summary,
                   });
-                  logger.info({ id: data.id, status: data.status, sourceGroup }, 'QA run updated');
+                  logger.info(
+                    { id: data.id, status: data.status, sourceGroup },
+                    'QA run updated',
+                  );
                 } else {
                   createQaRun({
                     id: data.id,
@@ -186,17 +223,29 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     report_path: data.report_path ?? null,
                     summary: data.summary ?? null,
                   });
-                  logger.info({ id: data.id, project: data.project, sourceGroup }, 'QA run created');
+                  logger.info(
+                    { id: data.id, project: data.project, sourceGroup },
+                    'QA run created',
+                  );
                 }
               } else {
-                logger.warn({ file, sourceGroup }, 'Invalid QA run payload - missing required fields');
+                logger.warn(
+                  { file, sourceGroup },
+                  'Invalid QA run payload - missing required fields',
+                );
               }
               fs.unlinkSync(filePath);
             } catch (err) {
-              logger.error({ file, sourceGroup, err }, 'Error processing QA run');
+              logger.error(
+                { file, sourceGroup, err },
+                'Error processing QA run',
+              );
               const errorDir = path.join(ipcBaseDir, 'errors');
               fs.mkdirSync(errorDir, { recursive: true });
-              fs.renameSync(filePath, path.join(errorDir, `${sourceGroup}-${file}`));
+              fs.renameSync(
+                filePath,
+                path.join(errorDir, `${sourceGroup}-${file}`),
+              );
             }
           }
         }
