@@ -46,13 +46,17 @@ Output: Write all deliverables to /workspace/extra/miniclaw/[project]/creative/
 --- STAGE 1: Creative Brief (do this first, then stop and wait for approval) ---
 
 Read the project brief and all brand files, then write creative-brief.md to the output folder.
-For each page/section include:
-- Intended placement and dimensions (e.g. 1440×600 hero, 800×600 section card)
+For each page/section include TWO variants — desktop and mobile — with the following for each:
+- Intended placement
+- Dimensions:
+    - Hero: desktop 1920×1080, mobile 828×1472
+    - Section card: desktop 1440×600, mobile 828×600
+    - Banner/CTA strip: desktop 1440×400, mobile 828×400
 - Mood and visual direction (lighting, tone, abstract vs photographic)
-- Subject description (what is in the image)
+- Subject description (what is in the image — may differ between desktop/mobile to suit the crop)
 - Colour palette (derived from colours.md)
-- ComfyUI generation prompt (ready to use)
-- Alt text suggestion
+- ComfyUI generation prompt (ready to use, tuned for the specific dimensions)
+- Alt text suggestion (shared across both variants is fine)
 
 After writing creative-brief.md, write an approval request to /workspace/ipc/approvals/request-[project]-creative.json:
 {
@@ -69,8 +73,8 @@ Then stop. DO NOT proceed to Stage 2 until approval is confirmed in the dashboar
 
 --- STAGE 2: Generation (only after approval) ---
 
-For each item in the approved brief:
-1. Generate the image via ComfyUI API — ComfyUI runs on the HOST machine:
+For each item in the approved brief, generate BOTH the desktop and mobile variant:
+1. Generate images via ComfyUI API — ComfyUI runs on the HOST machine:
    - API endpoint: http://host.docker.internal:8188
      (Do NOT use 127.0.0.1 — that is the container loopback, not the host)
    - Do NOT check for a local ComfyUI directory — verify availability by calling
@@ -78,9 +82,13 @@ For each item in the approved brief:
    - The FLUX model is GGUF format — use the UnetLoaderGGUF node, NOT UNETLoader
      Discover available GGUF models via GET http://host.docker.internal:8188/object_info/UnetLoaderGGUF
    - Discover standard checkpoints via GET http://host.docker.internal:8188/object_info/CheckpointLoaderSimple
+   - Set width/height in the workflow to match each variant's dimensions exactly
    - Save generated images to /workspace/extra/miniclaw/[project]/creative/banners/
-2. For any sections where generation is not appropriate, add to image-suggestions.md:
-   stock photo direction, search keywords (Unsplash/Pexels), alt text
+     Use a clear naming convention: [section]-desktop.[ext] and [section]-mobile.[ext]
+     e.g. hero-desktop.png, hero-mobile.png, cta-desktop.png, cta-mobile.png
+2. For any sections where generation is not appropriate, add BOTH desktop and mobile
+   directions to image-suggestions.md: stock photo search keywords (Unsplash/Pexels),
+   crop/composition notes for each size, alt text
 
 After completing, summarise: what was generated, what was suggested, and recommended
 placement for each visual asset.
@@ -120,12 +128,18 @@ After completing, summarise the creative direction in 2-3 sentences and flag any
 
 When generating banners:
 - **Derive the visual style from the brand guidelines** — colours, mood, typography tone
-- Generate multiple crops if needed (wide hero + square card variant)
-- If ComfyUI is unavailable, write a detailed `image-brief.md` with prompts ready to use
+- Always generate both a desktop and mobile variant for every asset:
+    - Hero: desktop 1920×1080, mobile 828×1472
+    - Section card: desktop 1440×600, mobile 828×600
+    - Banner/CTA strip: desktop 1440×400, mobile 828×400
+- File naming: `[section]-desktop.png` and `[section]-mobile.png`
+- The mobile prompt may need composition adjustments (tighter crop, subject centred) — adapt accordingly
+- If ComfyUI is unavailable, write a detailed `image-brief.md` with prompts ready to use for both variants
 - For each generated image, note: prompt used, dimensions, intended placement, suggested alt text
 
 When suggesting images (no generation):
 - Provide 3-5 search terms per section for stock libraries (Unsplash, Pexels, Adobe Stock)
+- Give separate crop/composition notes for desktop and mobile sizes
 - Describe the ideal subject, mood, colour temperature, and composition
 - Flag which sections most need real photography vs can use illustration or abstract visuals
 
